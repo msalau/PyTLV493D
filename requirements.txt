@@ -1,4 +1,5 @@
 bitstruct==8.9.0
+mock==4.0.3
 pylint==2.15.2
 pytest==7.1.3
 pytest-cov==3.0.0
