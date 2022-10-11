@@ -2,7 +2,15 @@
 
 import argparse
 import logging
+import sys
 import time
+from smbus2 import SMBus
+
+#pylint: disable=wrong-import-position
+sys.path.append(".")
+sys.path.append("..")
+#pylint: enable=wrong-import-position
+
 from tlv493d import TLV493D
 
 logger = logging.getLogger(__name__)
@@ -16,16 +24,17 @@ def main():
     args = parser.parse_args()
 
     if args.debug:
+        logging.getLogger("tlv493d").setLevel(logging.DEBUG)
         logger.setLevel(logging.DEBUG)
 
     logger.debug("Arguments: %s", args)
 
     try:
-        sensor = TLV493D(args.bus)
+        sensor = TLV493D(SMBus(args.bus))
         while True:
-            sensor.update_config(**{"LOW": 1})
+            sensor.update_config(LOW=1)
             time.sleep(0.1)
-            sensor.update_config(**{"LOW": 0})
+            sensor.update_config(LOW=0)
             time.sleep(0.1)
             sensor.update_data()
             while sensor.get_value("PD") == 0:

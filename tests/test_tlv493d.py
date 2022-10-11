@@ -1,35 +1,12 @@
 from conftest import *
 from tlv493d import TLV493D
-from smbus2 import SMBus, i2c_msg
-
-def test_init_from_bus_number(smbus_mock):
-    SMBus.read_i2c_block_data.return_value = list(bytes(10))
-    dev = TLV493D(1)
-    SMBus.open.assert_called_once_with(1)
-    SMBus.read_i2c_block_data.assert_called_once_with(0x5e, 0, 10)
-
-def test_init_from_bus_device(smbus_mock):
-    SMBus.read_i2c_block_data.return_value = list(bytes(10))
-    dev = TLV493D("/dev/i2c-0")
-    SMBus.open.assert_called_once_with("/dev/i2c-0")
-    SMBus.read_i2c_block_data.assert_called_once_with(0x5e, 0, 10)
+from smbus2 import SMBus
 
 def test_init_from_smbus_object(smbus_mock):
     SMBus.read_i2c_block_data.return_value = list(bytes(10))
     dev = TLV493D(SMBus())
     SMBus.open.assert_not_called()
     SMBus.read_i2c_block_data.assert_called_once_with(0x5e, 0, 10)
-
-def test_init_with_address(smbus_mock):
-    SMBus.read_i2c_block_data.return_value = list(bytes(10))
-    dev = TLV493D(SMBus(), address=42)
-    SMBus.open.assert_not_called()
-    SMBus.read_i2c_block_data.assert_called_once_with(42, 0, 10)
-
-def test_reset(smbus_mock):
-    SMBus.read_i2c_block_data.return_value = list(bytes(10))
-    TLV493D(SMBus()).reset()
-    SMBus.i2c_rdwr.assert_called_once()
 
 def test_read_bx_pos(smbus_mock):
     SMBus.read_i2c_block_data.return_value = [1, 0, 0, 0, 0x20, 0, 0, 0, 0, 0]
@@ -114,7 +91,21 @@ def test_factory_settings(smbus_mock):
     assert dev.get_value("FactSet2") == 2
     assert dev.get_value("FactSet3") == 3
 
+def test_config_unknown(smbus_mock):
+    with pytest.raises(KeyError):
+        SMBus.read_i2c_block_data.return_value = list(bytes(10))
+        dev = TLV493D(SMBus())
+        dev.update_config(FOO=0, BAR=1)
+
+@pytest.mark.parametrize("name", ["Res1", "Res2", "Res3"])
+def test_config_reserved(smbus_mock, name):
+    with pytest.raises(AttributeError):
+        SMBus.read_i2c_block_data.return_value = list(bytes(10))
+        dev = TLV493D(SMBus())
+        dev.update_config(**{name: 0})
+
 @pytest.mark.parametrize("name, value, mod1, mod2", [
+    ("P", 0, 0x80, 0),
     ("IICAddr", 3, 0xE0, 0),
     ("INT", 1, 0x04, 0),
     ("FAST", 1, 0x02, 0),
@@ -125,14 +116,37 @@ def test_factory_settings(smbus_mock):
 ])
 def test_config(smbus_mock, name, value, mod1, mod2):
     SMBus.read_i2c_block_data.return_value = list(bytes(10))
-    dev = TLV493D(1)
+    dev = TLV493D(SMBus())
     for key in dev._config:
         dev._config[key] = 0
     dev.update_config(**{name: value})
-    SMBus.write_i2c_block_data(0x5e, 0, [mod1, 0, mod2])
+    SMBus.write_i2c_block_data.assert_called_once_with(0x5e, 0, [mod1, 0, mod2])
 
-def test_config_factory_settings(smbus_mock):
-    SMBus.read_i2c_block_data.return_value = [0, 0, 0, 0, 0, 0, 0, 0x18, 0x42, 0x14]
+@pytest.mark.parametrize("data, config", [
+    ([0, 0, 0, 0, 0, 0, 0, 0xff, 0, 0], [0x98, 0x00, 0x00]),
+    ([0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0], [0x80, 0xff, 0x00]),
+    ([0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff], [0x00, 0x00, 0x1f])
+])
+def test_config_factory_settings(smbus_mock, data, config):
+    SMBus.read_i2c_block_data.return_value = data
     dev = TLV493D(SMBus())
+    for key in dev._config:
+        if not key.startswith("Res"):
+            dev._config[key] = 0
     dev.update_config()
-    SMBus.write_i2c_block_data(0x5e, 0, [0x98, 0x42, 0x14])
+    SMBus.write_i2c_block_data.assert_called_once_with(0x5e, 0, config)
+
+@pytest.mark.parametrize("code, address", [
+    (0, 0xBD),
+    (1, 0xB5),
+    (2, 0x9D),
+    (3, 0x95)
+])
+def test_config_address(smbus_mock, code, address):
+    SMBus.read_i2c_block_data.return_value = list(bytes(10))
+    dev = TLV493D(SMBus())
+    dev.update_config(IICAddr=code)
+    SMBus.read_i2c_block_data.reset_mock()
+
+    dev.update_data()
+    SMBus.read_i2c_block_data.assert_called_once_with((address >> 1), 0, 10)
