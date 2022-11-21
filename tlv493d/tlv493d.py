@@ -10,11 +10,11 @@ class TLV493D:
     TEMP_OFFSET = 340
 
     VALUES_FMT = CompiledFormatDict(">u8u8u8 u4u2u2 u4u4 u1u1u1u1u4 u8u8u8u8",
-                                    ["Bx", "By", "Bz",
+                                    ["BxH", "ByH", "BzH",
                                      "TempH", "FRM", "CH",
-                                     "BxH", "ByH",
-                                     "Res", "T", "FF", "PD", "BzH",
-                                     "Temp", "FactSet1", "FactSet2", "FactSet3"])
+                                     "BxL", "ByL",
+                                     "Res", "T", "FF", "PD", "BzL",
+                                     "TempL", "FactSet1", "FactSet2", "FactSet3"])
 
     CONFIG_FMT = CompiledFormatDict(">u1u2u2u1u1u1 u8 u1u1u1u5",
                                     ["P", "IICAddr", "Res1", "INT", "FAST", "LOW",
@@ -52,9 +52,16 @@ class TLV493D:
         return value & 0x01
 
     def get_value(self, name):
-        value = self._values[name] | (self._values.get(f"{name}H", 0) << 8)
-        if value & 0x0800:
-            value = (value & 0x7FF) - 2048
+        return self._values[name]
+
+    def get_b_value(self, name):
+        value = self._values[f"{name}L"] | (self._values[f"{name}H"] << 4)
+        value = (value & 0x7FF) - (value & 0x800)
+        return value
+
+    def get_temp_value(self):
+        value = self._values["TempL"] | (self._values["TempH"] << 8)
+        value = (value & 0x7FF) - (value & 0x800)
         return value
 
     def get_x(self):
@@ -80,12 +87,10 @@ class TLV493D:
         logger.debug("Values (raw): %s", " ".join(f"{v:02x}" for v in data))
         logger.debug("Values: %s", str(self._values))
 
-        self._values["BxV"] = self.get_value("Bx") * self.FLUX_COEF
-        self._values["ByV"] = self.get_value("By") * self.FLUX_COEF
-        self._values["BzV"] = self.get_value("Bz") * self.FLUX_COEF
-        self._values["TempV"] = (self.get_value("Temp") - self.TEMP_OFFSET) * self.TEMP_COEF + 25
-        logger.debug("Frame %u: (%g,%g,%g) @ %g °C", self._values["FRM"], self._values["BxV"],
-                     self._values["ByV"], self._values["BzV"], self._values["TempV"])
+        self._values["BxV"] = self.get_b_value("Bx") * self.FLUX_COEF
+        self._values["ByV"] = self.get_b_value("By") * self.FLUX_COEF
+        self._values["BzV"] = self.get_b_value("Bz") * self.FLUX_COEF
+        self._values["TempV"] = (self.get_temp_value() - self.TEMP_OFFSET) * self.TEMP_COEF + 25
 
     def update_config(self, **kwargs):
         for name, value in kwargs.items():

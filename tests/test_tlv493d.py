@@ -11,65 +11,63 @@ def test_init_from_smbus_object(smbus_mock):
 def test_read_bx_pos(smbus_mock):
     SMBus.read_i2c_block_data.return_value = [1, 0, 0, 0, 0x20, 0, 0, 0, 0, 0]
     dev = TLV493D(SMBus())
-    assert dev._values["Bx"] == 1
-    assert dev._values["BxH"] == 2
-    assert dev.get_value("Bx") == 0x201
+    assert dev._values["BxH"] == 1
+    assert dev._values["BxL"] == 2
+    assert dev.x == 0x12 * dev.FLUX_COEF
 
 def test_read_bx_neg(smbus_mock):
-    SMBus.read_i2c_block_data.return_value = [1, 0, 0, 0, 0x80, 0, 0, 0, 0, 0]
+    SMBus.read_i2c_block_data.return_value = [0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     dev = TLV493D(SMBus())
-    assert dev._values["Bx"] == 1
-    assert dev._values["BxH"] == 8
-    assert dev.get_value("Bx") == -2047
+    assert dev._values["BxH"] == 0x80
+    assert dev._values["BxL"] == 0
+    assert dev.x == -2048 * dev.FLUX_COEF
 
 def test_read_by_pos(smbus_mock):
     SMBus.read_i2c_block_data.return_value = [0, 4, 0, 0, 0x03, 0, 0, 0, 0, 0]
     dev = TLV493D(SMBus())
-    assert dev._values["By"] == 4
-    assert dev._values["ByH"] == 3
-    assert dev.get_value("By") == 0x304
+    assert dev._values["ByH"] == 4
+    assert dev._values["ByL"] == 3
+    assert dev.y == 0x043 * dev.FLUX_COEF
 
 def test_read_by_neg(smbus_mock):
-    SMBus.read_i2c_block_data.return_value = [0, 0, 0, 0, 0x08, 0, 0, 0, 0, 0]
+    SMBus.read_i2c_block_data.return_value = [0, 0x80, 0, 0, 0x08, 0, 0, 0, 0, 0]
     dev = TLV493D(SMBus())
-    assert dev._values["By"] == 0
-    assert dev._values["ByH"] == 8
-    assert dev.get_value("By") == -2048
+    assert dev._values["ByH"] == 0x80
+    assert dev._values["ByL"] == 8
+    assert dev.y == (8 - 2048) * dev.FLUX_COEF
 
 def test_read_bz_pos(smbus_mock):
     SMBus.read_i2c_block_data.return_value = [0, 0, 8, 0, 0, 0x07, 0, 0, 0, 0]
     dev = TLV493D(SMBus())
-    assert dev._values["Bz"] == 8
-    assert dev._values["BzH"] == 7
-    assert dev.get_value("Bz") == 0x708
+    assert dev._values["BzH"] == 8
+    assert dev._values["BzL"] == 7
+    assert dev.z == 0x87 * dev.FLUX_COEF
 
 def test_read_bz_neg(smbus_mock):
-    SMBus.read_i2c_block_data.return_value = [0, 0, 8, 0, 0, 0x08, 0, 0, 0, 0]
+    SMBus.read_i2c_block_data.return_value = [0, 0, 0x80, 0, 0, 0x09, 0, 0, 0, 0]
     dev = TLV493D(SMBus())
-    assert dev._values["Bz"] == 8
-    assert dev._values["BzH"] == 8
-    assert dev.get_value("Bz") == -2040
+    assert dev._values["BzL"] == 9
+    assert dev._values["BzH"] == 0x80
+    assert dev.z == (9 - 2048) * dev.FLUX_COEF
 
 def test_read_temp_pos(smbus_mock):
     SMBus.read_i2c_block_data.return_value = [0, 0, 0, 0x70, 0, 0, 0x20, 0, 0, 0]
     dev = TLV493D(SMBus())
-    assert dev._values["Temp"] == 32
+    assert dev._values["TempL"] == 32
     assert dev._values["TempH"] == 7
-    assert dev.get_value("Temp") == 0x720
 
 def test_read_temp_neg(smbus_mock):
     SMBus.read_i2c_block_data.return_value = [0, 0, 0, 0x80, 0, 0, 0x20, 0, 0, 0]
     dev = TLV493D(SMBus())
-    assert dev._values["Temp"] == 32
+    assert dev._values["TempL"] == 32
     assert dev._values["TempH"] == 8
-    assert dev.get_value("Temp") == -2016
 
 def test_xyz_and_temp(smbus_mock):
     SMBus.read_i2c_block_data.return_value = [1, 2, 4, 0x10, 0, 0, 0x5e, 0, 0, 0]
     dev = TLV493D(SMBus())
-    assert dev.x == 0.098
-    assert dev.y == 0.196
-    assert dev.z == 0.392
+    assert dev.x == 0x10 * dev.FLUX_COEF
+    assert dev.y == 0x20 * dev.FLUX_COEF
+    assert dev.z == 0x40 * dev.FLUX_COEF
     assert dev.temp == 36
 
 @pytest.mark.parametrize("name, value", [("FRM", 0x0C), ("CH", 0x03)])
