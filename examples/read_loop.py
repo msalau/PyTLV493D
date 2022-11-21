@@ -31,15 +31,11 @@ def main():
 
     try:
         sensor = TLV493D(SMBus(args.bus))
+        sensor.update_config(FAST=1, LOW=1, INT=0)
         while True:
-            sensor.update_config(LOW=1)
-            time.sleep(0.1)
-            sensor.update_config(LOW=0)
-            time.sleep(0.1)
+            time.sleep(0.2)
             sensor.update_data()
-            while sensor.get_value("PD") == 0:
-                sensor.update_data()
-            logger.info("(%g,%g,%g) @ %g", sensor.x, sensor.y, sensor.z, sensor.temp)
+            logger.info("(%g,%g,%g) mT @ %g °C", sensor.x, sensor.y, sensor.z, sensor.temp)
     except FileNotFoundError:
         logging.error("I2C bus is not accessible")
     except KeyboardInterrupt:
